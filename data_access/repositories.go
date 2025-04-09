@@ -2,9 +2,12 @@ package data_access
 
 import (
 	"context"
+	"fmt"
 	"movie-vs-backend/models"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -69,17 +72,75 @@ func (r *MovieRepository) GetRandomPair(ctx context.Context) ([]models.Movie, er
 	return movies, nil
 }
 
-// SubmitBattle updates the winner of a battle
-func (r *BattleRepository) SubmitBattle(ctx context.Context, battle *models.Battle) error {
+// SaveMovieRanking saves or updates a movie ranking for a user
+func (r *BattleRepository) SaveMovieRanking(ctx context.Context, userID primitive.ObjectID, ranking *models.MovieRanking) error {
+	// Update the specific movie ranking in the user's movie_rankings array
+	_, err := r.db.Collection("users").UpdateOne(
+		ctx,
+		bson.M{
+			"_id": userID,
+			"movie_rankings.movie_id": ranking.MovieID,
+		},
+		bson.M{
+			"$set": bson.M{"movie_rankings.$": ranking},
+		},
+	)
 
-	if battle.Winner.Title == battle.MovieA.Title {
-
-	} else {
-
+	if err != nil {
+		// If the movie ranking doesn't exist in the array, push it
+		if err == mongo.ErrNoDocuments {
+			_, err = r.db.Collection("users").UpdateOne(
+				ctx,
+				bson.M{"_id": userID},
+				bson.M{"$push": bson.M{"movie_rankings": ranking}},
+			)
+		}
 	}
 
-	_, err := r.db.Collection("battles").UpdateOne(ctx, filter, update)
 	return err
+}
+
+// SaveBattle saves a battle result to the database
+func (r *BattleRepository) SaveBattle(ctx context.Context, battle *models.Battle) error {
+	_, err := r.db.Collection("battles").InsertOne(ctx, battle)
+	return err
+}
+
+// GetMovieRanking returns the ranking for a specific movie for a user
+func (r *BattleRepository) GetMovieRanking(ctx context.Context, userID primitive.ObjectID, movieID primitive.ObjectID) (*models.MovieRanking, error) {
+	// Find the user's document and extract the specific movie ranking
+	var result struct {
+		MovieRankings []models.MovieRanking `bson:"movie_rankings"`
+	}
+
+	err := r.db.Collection("users").FindOne(
+		ctx,
+		bson.M{"_id": userID},
+	).Decode(&result)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("user not found: %v", err)
+		}
+		return nil, err
+	}
+
+	// Look for the specific movie ranking in the array
+	for _, ranking := range result.MovieRankings {
+		if ranking.MovieID == movieID {
+			return &ranking, nil
+		}
+	}
+
+	// If no ranking exists, return a new ranking with default values
+	return &models.MovieRanking{
+		MovieID:     movieID,
+		ELORating:   1200, // Default ELO rating
+		MatchCount:  0,
+		WinCount:    0,
+		LossCount:   0,
+		LastUpdated: time.Now(),
+	}, nil
 }
 
 // GetTopTwenty returns the top twenty movies based on battle wins

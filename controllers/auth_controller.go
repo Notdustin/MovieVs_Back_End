@@ -46,13 +46,13 @@ func (c *AuthController) Register(ctx *gin.Context) {
 		return
 	}
 
-	user, err := c.authService.Register(ctx.Request.Context(), &req)
+	token, err := c.authService.Register(ctx.Request.Context(), &req)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, user)
+	ctx.JSON(http.StatusCreated, gin.H{"token": token})
 }
 
 func (c *AuthController) Login(ctx *gin.Context) {

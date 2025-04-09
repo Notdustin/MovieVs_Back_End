@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"time"
@@ -110,14 +111,70 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 func (s *GameService) SubmitBattle(ctx context.Context, userID primitive.ObjectID, req *models.SubmitBattleRequest) error {
 	// Create a new battle record
 	battle := &models.Battle{
-		MovieA:    models.Movie{ID: req.MovieAID},
-		MovieB:    models.Movie{ID: req.MovieBID},
-		Winner:    models.Movie,
+		MovieA:    req.MovieA,
+		MovieB:    req.MovieB,
+		Winner:    req.Winner,
 		CreatedAt: time.Now(),
 	}
 
-	// Submit the battle result
-	return s.battleRepo.SubmitBattle(ctx, battle)
+	const K = 32.0
+
+	var winner, loser *models.Movie
+	if battle.Winner.Title == battle.MovieA.Title {
+		winner = &battle.MovieA
+		loser = &battle.MovieB
+	} else {
+		winner = &battle.MovieB
+		loser = &battle.MovieA
+	}
+
+	// Load current Elo ratings
+	winnerRanking, err := s.battleRepo.GetMovieRanking(ctx, userID, winner.ID)
+	if err != nil {
+		return fmt.Errorf("error getting winner ranking: %v", err)
+	}
+
+	loserRanking, err := s.battleRepo.GetMovieRanking(ctx, userID, loser.ID)
+	if err != nil {
+		return fmt.Errorf("error getting loser ranking: %v", err)
+	}
+
+	// Elo math
+	ra := float64(winnerRanking.ELORating)
+	rb := float64(loserRanking.ELORating)
+
+	ea := 1.0 / (1.0 + math.Pow(10, (rb-ra)/400))
+	eb := 1.0 / (1.0 + math.Pow(10, (ra-rb)/400))
+
+	raNew := ra + K*(1-ea)
+	rbNew := rb + K*(0-eb)
+
+	// Update winner ranking
+	winnerRanking.ELORating = int(raNew)
+	winnerRanking.MatchCount++
+	winnerRanking.WinCount++
+	winnerRanking.LastUpdated = time.Now()
+
+	// Update loser ranking
+	loserRanking.ELORating = int(rbNew)
+	loserRanking.MatchCount++
+	loserRanking.LossCount++
+	loserRanking.LastUpdated = time.Now()
+
+	// Save the battle result
+	if err := s.battleRepo.SaveBattle(ctx, battle); err != nil {
+		return fmt.Errorf("error saving battle: %v", err)
+	}
+
+	// Save updated rankings
+	if err := s.battleRepo.SaveMovieRanking(ctx, userID, winnerRanking); err != nil {
+		return fmt.Errorf("error saving winner ranking: %v", err)
+	}
+	if err := s.battleRepo.SaveMovieRanking(ctx, userID, loserRanking); err != nil {
+		return fmt.Errorf("error saving loser ranking: %v", err)
+	}
+
+	return nil
 }
 
 // GetTopTwenty returns the top twenty movies based on battle wins

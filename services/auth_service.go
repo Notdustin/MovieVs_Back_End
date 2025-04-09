@@ -25,20 +25,20 @@ func NewAuthService(userRepo *data_access.UserRepository, jwtSecret string) *Aut
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest) (*models.User, error) {
+func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest) (string, error) {
 	existingUser, _ := s.userRepo.FindByEmail(ctx, req.Email)
 	if existingUser != nil {
-		return nil, errors.New("user already exists")
+		return "", errors.New("user already exists")
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	movieRankings, err := helper.InitializeMovieRankings()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	user := &models.User{
@@ -49,10 +49,26 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 	}
 
 	if err := s.userRepo.CreateUser(ctx, user); err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return user, nil
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return "", errors.New("invalid credentials")
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": user.ID.Hex(),
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println("tokenstring???", tokenString)
+
+	return tokenString, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (string, error) {
