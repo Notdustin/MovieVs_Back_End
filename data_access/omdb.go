@@ -55,15 +55,6 @@ func (c *OMDBClient) FetchMovie(ctx context.Context, title string) (*models.Movi
 		return nil, fmt.Errorf("error converting year: %v", err)
 	}
 
-	// Convert rating to float64 if present
-	rating := 0.0
-	if omdbResp.ImdbRating != "N/A" {
-		rating, err = strconv.ParseFloat(omdbResp.ImdbRating, 64)
-		if err != nil {
-			return nil, fmt.Errorf("error converting IMDB rating: %v", err)
-		}
-	}
-
 	// Create and return the movie model
 	movie := &models.Movie{
 		Title:      omdbResp.Title,
@@ -75,7 +66,6 @@ func (c *OMDBClient) FetchMovie(ctx context.Context, title string) (*models.Movi
 		Actors:     omdbResp.Actors,
 		IMDBRating: omdbResp.ImdbRating,
 		IMDBID:     omdbResp.ImdbID,
-		Rating:     rating,
 	}
 
 	return movie, nil
