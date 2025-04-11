@@ -78,7 +78,7 @@ func (r *BattleRepository) SaveMovieRanking(ctx context.Context, userID primitiv
 	_, err := r.db.Collection("users").UpdateOne(
 		ctx,
 		bson.M{
-			"_id": userID,
+			"_id":                     userID,
 			"movie_rankings.movie_id": ranking.MovieID,
 		},
 		bson.M{
@@ -97,12 +97,6 @@ func (r *BattleRepository) SaveMovieRanking(ctx context.Context, userID primitiv
 		}
 	}
 
-	return err
-}
-
-// SaveBattle saves a battle result to the database
-func (r *BattleRepository) SaveBattle(ctx context.Context, battle *models.Battle) error {
-	_, err := r.db.Collection("battles").InsertOne(ctx, battle)
 	return err
 }
 

@@ -117,6 +117,7 @@ func (s *GameService) SubmitBattle(ctx context.Context, userID primitive.ObjectI
 		CreatedAt: time.Now(),
 	}
 
+	// Elo constants (determines how much ratings can change after a single match/battle.)
 	const K = 32.0
 
 	var winner, loser *models.Movie
@@ -134,37 +135,41 @@ func (s *GameService) SubmitBattle(ctx context.Context, userID primitive.ObjectI
 		return fmt.Errorf("error getting winner ranking: %v", err)
 	}
 
+	fmt.Println("Do You have a winnerRanking??", winnerRanking)
+
 	loserRanking, err := s.battleRepo.GetMovieRanking(ctx, userID, loser.ID)
 	if err != nil {
 		return fmt.Errorf("error getting loser ranking: %v", err)
 	}
 
+	fmt.Println("Do You have a loserRanking??", loserRanking)
+
 	// Elo math
-	ra := float64(winnerRanking.ELORating)
-	rb := float64(loserRanking.ELORating)
+	// ra
+	currentWinnerRanking := float64(winnerRanking.ELORating)
+	// rb
+	currentLoserRanking := float64(loserRanking.ELORating)
 
-	ea := 1.0 / (1.0 + math.Pow(10, (rb-ra)/400))
-	eb := 1.0 / (1.0 + math.Pow(10, (ra-rb)/400))
+	ea := 1.0 / (1.0 + math.Pow(10, (currentLoserRanking-currentWinnerRanking)/400))
+	eb := 1.0 / (1.0 + math.Pow(10, (currentWinnerRanking-currentLoserRanking)/400))
 
-	raNew := ra + K*(1-ea)
-	rbNew := rb + K*(0-eb)
+	newWinnerRanking := currentWinnerRanking + K*(1-ea)
+	newLoserRanking := currentLoserRanking + K*(0-eb)
+
+	fmt.Println("Do You have a newWinnerRanking??", newWinnerRanking)
+	fmt.Println("Do You have a newLoserRanking??", newLoserRanking)
 
 	// Update winner ranking
-	winnerRanking.ELORating = int(raNew)
+	winnerRanking.ELORating = int(newWinnerRanking)
 	winnerRanking.MatchCount++
 	winnerRanking.WinCount++
 	winnerRanking.LastUpdated = time.Now()
 
 	// Update loser ranking
-	loserRanking.ELORating = int(rbNew)
+	loserRanking.ELORating = int(newLoserRanking)
 	loserRanking.MatchCount++
 	loserRanking.LossCount++
 	loserRanking.LastUpdated = time.Now()
-
-	// Save the battle result
-	if err := s.battleRepo.SaveBattle(ctx, battle); err != nil {
-		return fmt.Errorf("error saving battle: %v", err)
-	}
 
 	// Save updated rankings
 	if err := s.battleRepo.SaveMovieRanking(ctx, userID, winnerRanking); err != nil {

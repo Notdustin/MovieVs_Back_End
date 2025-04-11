@@ -8,7 +8,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const jwtSecret = "your-secret-key" // In production, use environment variable
+var jwtSecret string
+
+func SetJWTSecret(secret string) {
+	jwtSecret = secret
+}
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {

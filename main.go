@@ -60,6 +60,9 @@ func main() {
 	movieRepo := data_access.NewMovieRepository(mongodb)
 	battleRepo := data_access.NewBattleRepository(mongodb)
 
+	// Set JWT secret for middleware
+	middleware.SetJWTSecret(cfg.JWTSecret)
+
 	// Initialize services
 	authService := services.NewAuthService(userRepo, cfg.JWTSecret)
 	gameService := services.NewGameService(cfg.MovieAPIKey, cfg.MovieAPIBaseURL, movieRepo, battleRepo, userRepo)
