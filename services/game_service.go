@@ -92,11 +92,13 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 	// Fetch movie details from OMDB API
 	movieADetailsA, err := s.FetchMovieFromOMDB(ctx, movieA.Title)
 	if err != nil {
+		fmt.Println("ERROR IN MovieA", err)
 		return nil, fmt.Errorf("error fetching MovieA details from OMDB API: %v", err)
 	}
 
 	movieBDetailsB, err := s.FetchMovieFromOMDB(ctx, movieB.Title)
 	if err != nil {
+		fmt.Println("ERROR IN MovieB", err)
 		return nil, fmt.Errorf("error fetching MovieB details from OMDB API: %v", err)
 	}
 

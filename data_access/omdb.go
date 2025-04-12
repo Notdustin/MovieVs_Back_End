@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"movie-vs-backend/models"
 )
@@ -49,16 +48,10 @@ func (c *OMDBClient) FetchMovie(ctx context.Context, title string) (*models.Movi
 		return nil, fmt.Errorf("error decoding OMDB response: %v", err)
 	}
 
-	// Convert year to int
-	year, err := strconv.Atoi(omdbResp.Year)
-	if err != nil {
-		return nil, fmt.Errorf("error converting year: %v", err)
-	}
-
 	// Create and return the movie model
 	movie := &models.Movie{
 		Title:      omdbResp.Title,
-		Year:       year,
+		Year:       omdbResp.Year,
 		Plot:       omdbResp.Plot,
 		Director:   omdbResp.Director,
 		PosterURL:  omdbResp.Poster,

@@ -7,7 +7,7 @@ import (
 type Movie struct {
 	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Title      string             `bson:"title" json:"title"`
-	Year       int                `bson:"year" json:"year"`
+	Year       string             `bson:"year" json:"year"`
 	PosterURL  string             `bson:"poster_url" json:"poster_url"`
 	Plot       string             `bson:"plot" json:"plot"`
 	Director   string             `bson:"director" json:"director"`
