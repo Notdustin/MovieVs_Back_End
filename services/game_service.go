@@ -41,13 +41,12 @@ func (s *GameService) FetchMovieFromOMDB(ctx context.Context, title string) (*mo
 	return s.omdbClient.FetchMovie(ctx, title)
 }
 
-func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse, error) {
+func (s *GameService) getRandomMovieFromCSV() (*models.Movie, error) {
 	// Read the CSV file where movie titles are stored
 	file, err := os.Open("IMDB-Movie-Data.csv")
 	if err != nil {
 		return nil, fmt.Errorf("error opening CSV file: %v", err)
 	}
-	fmt.Println("Do You have a file", file)
 	defer file.Close()
 
 	// Create a new CSV reader
@@ -65,29 +64,64 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 		return nil, fmt.Errorf("error reading CSV records: %v", err)
 	}
 
-	// Get two random index of movie titles
-	if len(records) < 2 {
-		return nil, fmt.Errorf("not enough movies in the CSV file")
+	// Check if there are any movies
+	if len(records) < 1 {
+		return nil, fmt.Errorf("no movies in the CSV file")
 	}
 
+	// Get random movie
 	rand.New(rand.NewSource(time.Now().UnixNano()))
-	index1 := rand.Intn(len(records))
-	index2 := index1
-	// redo if same index ()
-	for index2 == index1 {
-		index2 = rand.Intn(len(records))
+	index := rand.Intn(len(records))
+
+	return &models.Movie{
+		Title: records[index][1], // Title is in the second column
+	}, nil
+}
+
+// getRandomMovieWithRetries attempts to get a random movie with a specified number of retries
+func (s *GameService) getRandomMovieWithRetries(maxRetries int) (*models.Movie, error) {
+	var movie *models.Movie
+	var err error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		movie, err = s.getRandomMovieFromCSV()
+		if err == nil {
+			break
+		}
+		if attempt < maxRetries {
+			continue
+		}
+		return nil, fmt.Errorf("failed to get movie after %d attempts: %v", maxRetries, err)
 	}
 
-	movieA := models.Movie{
-		Title: records[index1][1], // Title is in the second column
+	return movie, nil
+}
+
+func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse, error) {
+	// Maximum number of retries (Some Movie Titles are not found in OMDB)
+	const maxRetries = 3
+
+	// Get first movie with retries
+	movieA, err := s.getRandomMovieWithRetries(maxRetries)
+	if err != nil {
+		return nil, err
 	}
 
-	movieB := models.Movie{
-		Title: records[index2][1],
+	// Get second movie with retries
+	movieB, err := s.getRandomMovieWithRetries(maxRetries)
+	if err != nil {
+		return nil, err
 	}
 
 	fmt.Println("Do You have a movieA", movieA)
 	fmt.Println("Do You have a movieB", movieB)
+
+	if s.AreMoviesIdentical(movieA, movieB) {
+		movieA, err = s.getRandomMovieFromCSV()
+		if err != nil {
+			return nil, fmt.Errorf("error getting second movie: %v", err)
+		}
+	}
 
 	// Fetch movie details from OMDB API
 	movieADetailsA, err := s.FetchMovieFromOMDB(ctx, movieA.Title)
@@ -182,6 +216,17 @@ func (s *GameService) SubmitBattle(ctx context.Context, userID primitive.ObjectI
 	}
 
 	return nil
+}
+
+// AreMoviesIdentical checks if two movies are identical by comparing all relevant fields
+func (s *GameService) AreMoviesIdentical(movieA, movieB *models.Movie) bool {
+	// If either movie is nil, they can't be identical
+	if movieA == nil || movieB == nil {
+		return false
+	}
+
+	// Compare all relevant fields
+	return movieA.Title == movieB.Title
 }
 
 // GetTopTwenty returns the top twenty movies based on battle wins

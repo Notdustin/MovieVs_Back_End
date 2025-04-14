@@ -38,6 +38,7 @@ func (c *OMDBClient) FetchMovie(ctx context.Context, title string) (*models.Movi
 	// Make the HTTP request
 	resp, err := http.Get(url)
 	if err != nil {
+		fmt.Println("DIDN'T RCV A MOVIE FROM OMDB", err)
 		return nil, fmt.Errorf("error making request to OMDB API: %v", err)
 	}
 	defer resp.Body.Close()

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"movie-vs-backend/models"
 	"movie-vs-backend/services"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -40,6 +41,8 @@ func (c *GameController) GetTopTwentyList(ctx *gin.Context) {
 }
 
 func (c *GameController) SubmitBattleWinner(ctx *gin.Context) {
+	fmt.Println("Submit Battle Winer ENDPOINT", ctx)
+
 	var req models.SubmitBattleRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
