@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -123,22 +124,70 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 		}
 	}
 
-	// Fetch movie details from OMDB API
-	movieADetailsA, err := s.FetchMovieFromOMDB(ctx, movieA.Title)
-	if err != nil {
-		fmt.Println("ERROR IN MovieA", err)
-		return nil, fmt.Errorf("error fetching MovieA details from OMDB API: %v", err)
+	// Fetch movie details from OMDB API with retries
+	var movieDetailsA, movieDetailsB *models.Movie
+	for {
+		var err error
+
+		movieDetailsA, err = s.FetchMovieFromOMDB(ctx, movieA.Title)
+		if err != nil {
+			fmt.Println("ERROR IN MovieA", err)
+			movieA, err = s.getRandomMovieWithRetries(maxRetries)
+			if err != nil {
+				return nil, fmt.Errorf("error getting new random movie A: %v", err)
+			}
+			continue // Try again with the new movie
+		}
+		break // Successfully got movie A details
 	}
 
-	movieBDetailsB, err := s.FetchMovieFromOMDB(ctx, movieB.Title)
-	if err != nil {
-		fmt.Println("ERROR IN MovieB", err)
-		return nil, fmt.Errorf("error fetching MovieB details from OMDB API: %v", err)
+	for {
+		var err error
+		// Fetch movie details from OMDB API
+		movieDetailsB, err = s.FetchMovieFromOMDB(ctx, movieB.Title)
+		if err != nil {
+			fmt.Println("ERROR IN MovieB:: ", err)
+			// Get new random movie with retries if OMDB API fails
+			movieB, err = s.getRandomMovieWithRetries(maxRetries)
+			if err != nil {
+				return nil, fmt.Errorf("error getting new random movie B: %v", err)
+			}
+			continue // Try again with the new movie
+		}
+		break // Successfully got movie B details
 	}
+
+	fmt.Println("Do You have a movieA", movieDetailsA.Title)
+	fmt.Println("Do You have a movieB", movieDetailsB.Title)
+	fmt.Println("Do You have a movie A ID BEFORE", movieDetailsA.ID)
+	fmt.Println("Do You have a movie B ID BEFORE", movieDetailsB.ID)
+
+	fmt.Printf("Searching for Movie A - Title: %s, Year: %s, IMDB ID: %s\n", movieDetailsA.Title, movieDetailsA.Year, movieDetailsA.IMDBID)
+	movieAFromMongo, err := s.movieRepo.FindMovieByTitle(ctx, movieDetailsA.Title)
+	if err != nil {
+		return nil, fmt.Errorf("error getting MovieA from MongoDB: %v", err)
+	}
+	if movieAFromMongo == nil {
+		fmt.Printf("Movie not found in MongoDB: %s\n", movieDetailsA.Title)
+	}
+
+	movieBFromMongo, err := s.movieRepo.FindMovieByTitle(ctx, movieDetailsB.Title)
+	if err != nil {
+		return nil, fmt.Errorf("error getting MovieB from MongoDB: %v", err)
+	}
+	if movieBFromMongo == nil {
+		fmt.Printf("Movie not found in MongoDB: %s\n", movieDetailsB.Title)
+	}
+
+	movieDetailsA.ID = movieAFromMongo.ID
+	movieDetailsB.ID = movieBFromMongo.ID
+
+	fmt.Println("Do You have a movie A ID AFTER", movieDetailsA.ID)
+	fmt.Println("Do You have a movie B ID AFTER", movieDetailsB.ID)
 
 	return &models.BattleResponse{
-		MovieA: *movieADetailsA,
-		MovieB: *movieBDetailsB,
+		MovieA: *movieDetailsA,
+		MovieB: *movieDetailsB,
 	}, nil
 
 }
@@ -197,21 +246,30 @@ func (s *GameService) SubmitBattle(ctx context.Context, userID primitive.ObjectI
 
 	// Update winner ranking
 	winnerRanking.ELORating = int(newWinnerRanking)
+	winnerRanking.MovieTitle = winner.Title
 	winnerRanking.MatchCount++
 	winnerRanking.WinCount++
 	winnerRanking.LastUpdated = time.Now()
 
 	// Update loser ranking
 	loserRanking.ELORating = int(newLoserRanking)
+	loserRanking.MovieTitle = loser.Title
 	loserRanking.MatchCount++
 	loserRanking.LossCount++
 	loserRanking.LastUpdated = time.Now()
 
+	winnerJSON, _ := json.MarshalIndent(winnerRanking, "", "  ")
+	loserJSON, _ := json.MarshalIndent(loserRanking, "", "  ")
+	fmt.Printf("THIS IS THE WINNER:\n%s\n", string(winnerJSON))
+	fmt.Printf("THIS IS THE LOSER:\n%s\n", string(loserJSON))
+
 	// Save updated rankings
 	if err := s.battleRepo.SaveMovieRanking(ctx, userID, winnerRanking); err != nil {
+		fmt.Println("ERROR In SaveMovieRanking Winner")
 		return fmt.Errorf("error saving winner ranking: %v", err)
 	}
 	if err := s.battleRepo.SaveMovieRanking(ctx, userID, loserRanking); err != nil {
+		fmt.Println("ERROR In SaveMovieRanking Loser")
 		return fmt.Errorf("error saving loser ranking: %v", err)
 	}
 

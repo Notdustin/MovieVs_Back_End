@@ -35,6 +35,43 @@ func NewMovieRepository(db *MongoDB) *MovieRepository {
 	return &MovieRepository{db: db}
 }
 
+// FindMovieByTitle searches for a movie in the users collection by its title and returns the movie if found
+func (r *MovieRepository) FindMovieByTitle(ctx context.Context, title string) (*models.Movie, error) {
+	fmt.Printf("Searching for movie with title: %s\n", title)
+
+	// Find movie in users' movie_rankings array by title
+	var result struct {
+		MovieRankings []models.MovieRanking `bson:"movie_rankings"`
+	}
+
+	err := r.db.Collection("users").FindOne(ctx,
+		bson.D{{
+			Key:   "movie_rankings.movie_title",
+			Value: title,
+		}},
+	).Decode(&result)
+
+	if err == mongo.ErrNoDocuments {
+		fmt.Printf("No movie found with title: %s\n", title)
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error finding movie: %v", err)
+	}
+
+	// Find the matching movie ranking
+	for _, ranking := range result.MovieRankings {
+		if ranking.MovieTitle == title {
+			return &models.Movie{
+				ID:    ranking.MovieID,
+				Title: ranking.MovieTitle,
+			}, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func NewBattleRepository(db *MongoDB) *BattleRepository {
 	return &BattleRepository{db: db}
 }
@@ -54,47 +91,38 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 	return &user, err
 }
 
-// MovieRepository methods
-func (r *MovieRepository) GetRandomPair(ctx context.Context) ([]models.Movie, error) {
-	pipeline := mongo.Pipeline{
-		{{Key: "$sample", Value: bson.D{{Key: "size", Value: 2}}}},
-	}
-
-	cursor, err := r.db.Collection("movies").Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
-	}
-
-	var movies []models.Movie
-	if err = cursor.All(ctx, &movies); err != nil {
-		return nil, err
-	}
-	return movies, nil
-}
-
 // SaveMovieRanking saves or updates a movie ranking for a user
 func (r *BattleRepository) SaveMovieRanking(ctx context.Context, userID primitive.ObjectID, ranking *models.MovieRanking) error {
-	// Update the specific movie ranking in the user's movie_rankings array
-	_, err := r.db.Collection("users").UpdateOne(
+	// First try to find and update an existing ranking
+	result, err := r.db.Collection("users").UpdateOne(
 		ctx,
 		bson.M{
 			"_id":                     userID,
 			"movie_rankings.movie_id": ranking.MovieID,
 		},
 		bson.M{
-			"$set": bson.M{"movie_rankings.$": ranking},
+			"$set": bson.M{
+				"movie_rankings.$.movie_title":  ranking.MovieTitle,
+				"movie_rankings.$.elo_rating":   ranking.ELORating,
+				"movie_rankings.$.match_count":  ranking.MatchCount,
+				"movie_rankings.$.win_count":    ranking.WinCount,
+				"movie_rankings.$.loss_count":   ranking.LossCount,
+				"movie_rankings.$.last_updated": ranking.LastUpdated,
+			},
 		},
 	)
 
 	if err != nil {
-		// If the movie ranking doesn't exist in the array, push it
-		if err == mongo.ErrNoDocuments {
-			_, err = r.db.Collection("users").UpdateOne(
-				ctx,
-				bson.M{"_id": userID},
-				bson.M{"$push": bson.M{"movie_rankings": ranking}},
-			)
-		}
+		return err
+	}
+
+	// If no existing ranking was found, add it as a new one
+	if result.MatchedCount == 0 {
+		_, err = r.db.Collection("users").UpdateOne(
+			ctx,
+			bson.M{"_id": userID},
+			bson.M{"$push": bson.M{"movie_rankings": ranking}},
+		)
 	}
 
 	return err
