@@ -102,7 +102,6 @@ func (r *BattleRepository) SaveMovieRanking(ctx context.Context, userID primitiv
 		},
 		bson.M{
 			"$set": bson.M{
-				"movie_rankings.$.movie_title":  ranking.MovieTitle,
 				"movie_rankings.$.elo_rating":   ranking.ELORating,
 				"movie_rankings.$.match_count":  ranking.MatchCount,
 				"movie_rankings.$.win_count":    ranking.WinCount,

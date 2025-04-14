@@ -114,9 +114,6 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 		return nil, err
 	}
 
-	fmt.Println("Do You have a movieA", movieA)
-	fmt.Println("Do You have a movieB", movieB)
-
 	if s.AreMoviesIdentical(movieA, movieB) {
 		movieA, err = s.getRandomMovieFromCSV()
 		if err != nil {
@@ -178,6 +175,12 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 	if movieBFromMongo == nil {
 		fmt.Printf("Movie not found in MongoDB: %s\n", movieDetailsB.Title)
 	}
+
+	fmt.Println("MONGO MOVIE A TITLE", movieAFromMongo.Title)
+	fmt.Println("MONGO MOVIE B TITLE", movieBFromMongo.Title)
+
+	fmt.Println("MONGO MOVIE A ID", movieAFromMongo.ID)
+	fmt.Println("MONGO MOVIE B ID", movieBFromMongo.ID)
 
 	movieDetailsA.ID = movieAFromMongo.ID
 	movieDetailsB.ID = movieBFromMongo.ID
