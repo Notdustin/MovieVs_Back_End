@@ -49,6 +49,11 @@ func (c *OMDBClient) FetchMovie(ctx context.Context, title string) (*models.Movi
 		return nil, fmt.Errorf("error decoding OMDB response: %v", err)
 	}
 
+	// Check if movie was not found
+	if omdbResp.Response == "False" {
+		return nil, fmt.Errorf("movie not found: %s", omdbResp.Error)
+	}
+
 	// Create and return the movie model
 	movie := &models.Movie{
 		Title:      omdbResp.Title,

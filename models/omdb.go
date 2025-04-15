@@ -2,6 +2,8 @@ package models
 
 // OmdbResponse represents the response from the OMDB API
 type OmdbResponse struct {
+	Response   string `json:"Response"`
+	Error      string `json:"Error"`
 	Title      string `json:"Title" bson:"title"`
 	Year       string `json:"Year" bson:"year"`
 	Plot       string `json:"Plot" bson:"plot"`

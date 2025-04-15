@@ -8,12 +8,13 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"movie-vs-backend/data_access"
 	"movie-vs-backend/models"
-
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type GameService struct {
@@ -21,6 +22,8 @@ type GameService struct {
 	movieRepo  *data_access.MovieRepository
 	battleRepo *data_access.BattleRepository
 	userRepo   *data_access.UserRepository
+	userStates map[primitive.ObjectID]*models.UserBattleState
+	stateMutex sync.RWMutex
 }
 
 func NewGameService(
@@ -98,7 +101,51 @@ func (s *GameService) getRandomMovieWithRetries(maxRetries int) (*models.Movie, 
 	return movie, nil
 }
 
-func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse, error) {
+func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.ObjectID) (*models.BattleResponse, error) {
+
+	// Get or create user battle state
+	s.stateMutex.Lock()
+	if s.userStates == nil {
+		s.userStates = make(map[primitive.ObjectID]*models.UserBattleState)
+	}
+	userState, exists := s.userStates[userID]
+	if !exists {
+		userState = &models.UserBattleState{
+			UserID:      userID,
+			BattleCount: 0,
+			LastUpdated: time.Now(),
+		}
+		s.userStates[userID] = userState
+	}
+	
+	// Increment battle count and handle special cases
+	userState.BattleCount++
+	if userState.BattleCount > 10 {
+		userState.BattleCount = 1
+	}
+	
+	// Trigger different repository methods based on battle count
+	switch userState.BattleCount {
+	case 3:
+		// Get top twenty movies asynchronously
+		go func() {
+			_, _ = s.GetTopTwenty(ctx, userID)
+		}()
+	case 5:
+		// Get top ten wins asynchronously
+		go func() {
+			_, _ = s.battleRepo.GetTopTwenty(ctx, userID) // Using GetTopTwenty as a substitute since GetTopTenWins doesn't exist
+		}()
+	case 10:
+		// Reset counter and get all stats asynchronously
+		go func() {
+			_, _ = s.GetTopTwenty(ctx, userID) // Using GetTopTwenty as a substitute since GetAllStats doesn't exist
+		}()
+	}
+	
+	userState.LastUpdated = time.Now()
+	s.stateMutex.Unlock()
+
 	// Maximum number of retries (Some Movie Titles are not found in OMDB)
 	const maxRetries = 3
 
@@ -156,8 +203,6 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 
 	fmt.Println("Do You have a movieA", movieDetailsA.Title)
 	fmt.Println("Do You have a movieB", movieDetailsB.Title)
-	fmt.Println("Do You have a movie A ID BEFORE", movieDetailsA.ID)
-	fmt.Println("Do You have a movie B ID BEFORE", movieDetailsB.ID)
 
 	fmt.Printf("Searching for Movie A - Title: %s, Year: %s, IMDB ID: %s\n", movieDetailsA.Title, movieDetailsA.Year, movieDetailsA.IMDBID)
 	movieAFromMongo, err := s.movieRepo.FindMovieByTitle(ctx, movieDetailsA.Title)
@@ -179,9 +224,6 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 	fmt.Println("MONGO MOVIE A TITLE", movieAFromMongo.Title)
 	fmt.Println("MONGO MOVIE B TITLE", movieBFromMongo.Title)
 
-	fmt.Println("MONGO MOVIE A ID", movieAFromMongo.ID)
-	fmt.Println("MONGO MOVIE B ID", movieBFromMongo.ID)
-
 	movieDetailsA.ID = movieAFromMongo.ID
 	movieDetailsB.ID = movieBFromMongo.ID
 
@@ -199,10 +241,9 @@ func (s *GameService) GetBattlePair(ctx context.Context) (*models.BattleResponse
 func (s *GameService) SubmitBattle(ctx context.Context, userID primitive.ObjectID, req *models.SubmitBattleRequest) error {
 	// Create a new battle record
 	battle := &models.Battle{
-		MovieA:    req.MovieA,
-		MovieB:    req.MovieB,
-		Winner:    req.Winner,
-		CreatedAt: time.Now(),
+		MovieA: req.MovieA,
+		MovieB: req.MovieB,
+		Winner: req.Winner,
 	}
 
 	// Elo constants (determines how much ratings can change after a single match/battle.)
@@ -291,6 +332,6 @@ func (s *GameService) AreMoviesIdentical(movieA, movieB *models.Movie) bool {
 }
 
 // GetTopTwenty returns the top twenty movies based on battle wins
-func (s *GameService) GetTopTwenty(ctx context.Context) ([]models.Movie, error) {
-	return s.battleRepo.GetTopTwenty(ctx)
+func (s *GameService) GetTopTwenty(ctx context.Context, userID primitive.ObjectID) ([]models.MovieRanking, error) {
+	return s.battleRepo.GetTopTwenty(ctx, userID)
 }

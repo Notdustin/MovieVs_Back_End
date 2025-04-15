@@ -164,35 +164,98 @@ func (r *BattleRepository) GetMovieRanking(ctx context.Context, userID primitive
 	}, nil
 }
 
-// GetTopTwenty returns the top twenty movies based on battle wins
-func (r *BattleRepository) GetTopTwenty(ctx context.Context) ([]models.Movie, error) {
+// GetTopTwentyByELO returns the top twenty movies for a user based on their ELO ratings
+func (r *BattleRepository) GetTopTwenty(ctx context.Context, userID primitive.ObjectID) ([]models.MovieRanking, error) {
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"winner": bson.M{"$exists": true}}}},
-		{{Key: "$group", Value: bson.M{
-			"_id":   "$winner",
-			"wins":  bson.M{"$sum": 1},
-			"movie": bson.M{"$first": "$movie_a"},
-		}}},
-		{{Key: "$sort", Value: bson.M{"wins": -1}}},
+		{{Key: "$match", Value: bson.M{"_id": userID}}},
+		{{Key: "$unwind", Value: "$movie_rankings"}},
+		{{Key: "$sort", Value: bson.M{"movie_rankings.elo_rating": -1}}},
 		{{Key: "$limit", Value: 20}},
 		{{Key: "$project", Value: bson.M{
-			"_id":    "$movie._id",
-			"title":  "$movie.title",
-			"year":   "$movie.year",
-			"poster": "$movie.poster",
-			"wins":   1,
+			"movie_id":     "$movie_rankings.movie_id",
+			"movie_title":  "$movie_rankings.movie_title",
+			"elo_rating":   "$movie_rankings.elo_rating",
+			"match_count":  "$movie_rankings.match_count",
+			"win_count":    "$movie_rankings.win_count",
+			"loss_count":   "$movie_rankings.loss_count",
+			"last_updated": "$movie_rankings.last_updated",
 		}}},
 	}
 
-	cursor, err := r.db.Collection("battles").Aggregate(ctx, pipeline)
+	cursor, err := r.db.Collection("users").Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error executing aggregate: %v", err)
 	}
 	defer cursor.Close(ctx)
 
-	var movies []models.Movie
-	if err = cursor.All(ctx, &movies); err != nil {
-		return nil, err
+	var rankings []models.MovieRanking
+	if err = cursor.All(ctx, &rankings); err != nil {
+		return nil, fmt.Errorf("error decoding results: %v", err)
 	}
-	return movies, nil
+
+	return rankings, nil
+}
+
+// GetTopTenByWins returns the top ten movies for a user based on their win count
+func (r *BattleRepository) GetTopTenByWins(ctx context.Context, userID primitive.ObjectID) ([]models.MovieRanking, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"_id": userID}}},
+		{{Key: "$unwind", Value: "$movie_rankings"}},
+		{{Key: "$sort", Value: bson.M{"movie_rankings.win_count": -1}}},
+		{{Key: "$limit", Value: 10}},
+		{{Key: "$project", Value: bson.M{
+			"movie_id":     "$movie_rankings.movie_id",
+			"movie_title":  "$movie_rankings.movie_title",
+			"elo_rating":   "$movie_rankings.elo_rating",
+			"match_count":  "$movie_rankings.match_count",
+			"win_count":    "$movie_rankings.win_count",
+			"loss_count":   "$movie_rankings.loss_count",
+			"last_updated": "$movie_rankings.last_updated",
+		}}},
+	}
+
+	cursor, err := r.db.Collection("users").Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("error executing aggregate: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var rankings []models.MovieRanking
+	if err = cursor.All(ctx, &rankings); err != nil {
+		return nil, fmt.Errorf("error decoding results: %v", err)
+	}
+
+	return rankings, nil
+}
+
+// GetTopTenByMatches returns the top ten movies for a user based on their match count
+func (r *BattleRepository) GetTopTenByMatches(ctx context.Context, userID primitive.ObjectID) ([]models.MovieRanking, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"_id": userID}}},
+		{{Key: "$unwind", Value: "$movie_rankings"}},
+		{{Key: "$sort", Value: bson.M{"movie_rankings.match_count": -1}}},
+		{{Key: "$limit", Value: 10}},
+		{{Key: "$project", Value: bson.M{
+			"movie_id":     "$movie_rankings.movie_id",
+			"movie_title":  "$movie_rankings.movie_title",
+			"elo_rating":   "$movie_rankings.elo_rating",
+			"match_count":  "$movie_rankings.match_count",
+			"win_count":    "$movie_rankings.win_count",
+			"loss_count":   "$movie_rankings.loss_count",
+			"last_updated": "$movie_rankings.last_updated",
+		}}},
+	}
+
+	cursor, err := r.db.Collection("users").Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("error executing aggregate: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var rankings []models.MovieRanking
+	if err = cursor.All(ctx, &rankings); err != nil {
+		return nil, fmt.Errorf("error decoding results: %v", err)
+	}
+
+	return rankings, nil
 }

@@ -92,7 +92,7 @@ func main() {
 		protected.Use(middleware.AuthMiddleware())
 		{
 			protected.GET("/battle", gameController.GetMovieBattlePair)
-			protected.GET("/leaderboard", gameController.GetTopTwentyList)
+			protected.GET("/topmovies", gameController.GetTopTwentyList)
 			protected.POST("/battle", gameController.SubmitBattleWinner)
 		}
 	}

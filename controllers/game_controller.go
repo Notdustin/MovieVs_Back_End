@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"net/http"
+	"fmt"
 	"movie-vs-backend/models"
 	"movie-vs-backend/services"
-	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,7 +21,19 @@ func NewGameController(gameService *services.GameService) *GameController {
 }
 
 func (c *GameController) GetMovieBattlePair(ctx *gin.Context) {
-	response, err := c.gameService.GetBattlePair(ctx.Request.Context())
+	userID, exists := ctx.Get("userID")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	userObjectID, ok := userID.(primitive.ObjectID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	response, err := c.gameService.GetBattlePair(ctx.Request.Context(), userObjectID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch movies"})
 		return
@@ -31,13 +43,21 @@ func (c *GameController) GetMovieBattlePair(ctx *gin.Context) {
 }
 
 func (c *GameController) GetTopTwentyList(ctx *gin.Context) {
-	users, err := c.gameService.GetTopTwenty(ctx.Request.Context())
+	// Get user ID from context
+	userID, _ := ctx.Get("user_id")
+	objID, err := primitive.ObjectIDFromHex(userID.(string))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	response, err := c.gameService.GetTopTwenty(ctx.Request.Context(), objID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch top users"})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, users)
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (c *GameController) SubmitBattleWinner(ctx *gin.Context) {
