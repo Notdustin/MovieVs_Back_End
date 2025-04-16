@@ -103,6 +103,9 @@ func (s *GameService) getRandomMovieWithRetries(maxRetries int) (*models.Movie, 
 }
 
 func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.ObjectID) (*models.BattleResponse, error) {
+
+	fmt.Printf("GetBattlePair called for user %v at %v\n", userID, time.Now())
+
 	// Maximum number of retries (Some Movie Titles are not found in OMDB)
 	const maxRetries = 3
 
@@ -191,7 +194,6 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 				MovieB = pair.MovieB
 			}
 		case <-time.After(5 * time.Second):
-			fmt.Println("Timeout waiting for top ten matches")
 			return nil, fmt.Errorf("timeout waiting for top ten matches")
 		}
 
@@ -238,7 +240,6 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 				MovieB = pair.MovieB
 			}
 		case <-time.After(5 * time.Second):
-			fmt.Println("Timeout waiting for top ten wins")
 		}
 	case 10:
 		// Reset counter and get all stats asynchronously
@@ -265,8 +266,6 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 				if err != nil {
 					fmt.Printf("Error getting movie B in case 10: %v\n", err)
 				}
-				fmt.Println("Movie A in case 10:", MovieA)
-				fmt.Println("Movie B in case 10:", MovieB)
 				movieChan <- &moviePair{MovieA: MovieA, MovieB: MovieB}
 			}
 		}()
@@ -278,11 +277,8 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 				MovieB = pair.MovieB
 			}
 		case <-time.After(5 * time.Second):
-			fmt.Println("Timeout waiting for top twenty")
 		}
 	default:
-		fmt.Println("Do You have a movie Pick??", MoviePickA, MoviePickB)
-
 		// Get first movie with retries
 		MovieA, err = s.getRandomMovieWithRetries(maxRetries)
 		if err != nil {
@@ -313,13 +309,9 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 	var movieDetailsA, movieDetailsB *models.Movie
 	for {
 		var err error
-		fmt.Println("MOVIEAAAAAAAAAAAAAAAAAAA:", MovieA)
-		fmt.Println("MOVIEBBBBBBBBBBBBBBBBBBB:", MovieB)
 
-		fmt.Println("MOVIE A TITLE ln 301", MovieA.Title)
 		movieDetailsA, err = s.FetchMovieFromOMDB(ctx, MovieA.Title)
 		if err != nil {
-			fmt.Println("ERROR IN MovieA", err)
 			MovieA, err = s.getRandomMovieWithRetries(maxRetries)
 			if err != nil {
 				return nil, fmt.Errorf("error getting new random movie A: %v", err)
@@ -331,11 +323,9 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 
 	for {
 		var err error
-		fmt.Println("MOVIE B TITLE ln 250", MovieB.Title)
 		// Fetch movie details from OMDB API
 		movieDetailsB, err = s.FetchMovieFromOMDB(ctx, MovieB.Title)
 		if err != nil {
-			fmt.Println("ERROR IN MovieB:: ", err)
 			// Get new random movie with retries if OMDB API fails
 			MovieB, err = s.getRandomMovieWithRetries(maxRetries)
 			if err != nil {
@@ -353,36 +343,31 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 	if err != nil {
 		return nil, fmt.Errorf("error getting MovieA from MongoDB: %v", err)
 	}
-	if movieAFromMongo == nil {
-		fmt.Printf("Movie A not found in MongoDB: %s, restarting flow...\n", movieDetailsA.Title)
-		// Reset battle count before releasing lock
-		userState.BattleCount = 0
-		// Release the mutex lock before restarting
-		s.stateMutex.Unlock()
-		// Restart the Get Battle Pair flow
-		return s.GetBattlePair(ctx, userID)
-	}
-
 	movieBFromMongo, err := s.movieRepo.FindMovieByTitle(ctx, movieDetailsB.Title)
 	if err != nil {
 		return nil, fmt.Errorf("error getting MovieB from MongoDB: %v", err)
 	}
+
+	restart := false
+	if movieAFromMongo == nil {
+		fmt.Printf("Movie A not found in MongoDB: %s, restarting flow...\n", movieDetailsA.Title)
+		userState.BattleCount = 0
+		restart = true
+	}
 	if movieBFromMongo == nil {
 		fmt.Printf("Movie B not found in MongoDB: %s, restarting flow...\n", movieDetailsB.Title)
-		// Reset battle count before releasing lock
 		userState.BattleCount = 0
-		// Release the mutex lock before restarting
-		s.stateMutex.Unlock()
-		// Restart the flow
-		return s.GetBattlePair(ctx, userID)
+		restart = true
 	}
 
+	// Defer will unlock mutex here
+	if restart {
+		fmt.Println("XXXXXXXXXXXXXXXXXXXXXXX Restarting flow...XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+		return s.GetBattlePair(ctx, userID)
+	}
 	// Both movies exist in MongoDB, safe to proceed
 	movieDetailsA.ID = movieAFromMongo.ID
 	movieDetailsB.ID = movieBFromMongo.ID
-
-	fmt.Println("Do You have a movie A ID AFTER", movieDetailsA.ID)
-	fmt.Println("Do You have a movie B ID AFTER", movieDetailsB.ID)
 
 	return &models.BattleResponse{
 		MovieA: *movieDetailsA,

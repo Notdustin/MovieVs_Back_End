@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"movie-vs-backend/models"
 	"movie-vs-backend/services"
 	"net/http"
@@ -23,7 +22,6 @@ func NewGameController(gameService *services.GameService) *GameController {
 func (c *GameController) GetMovieBattlePair(ctx *gin.Context) {
 	userID, exists := ctx.Get("user_id")
 
-	fmt.Println("User ID:::::::::::::::::::::::::::::", userID)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
@@ -69,7 +67,6 @@ func (c *GameController) GetTopTwentyList(ctx *gin.Context) {
 }
 
 func (c *GameController) SubmitBattleWinner(ctx *gin.Context) {
-	fmt.Println("Submit Battle Winer ENDPOINT", ctx)
 
 	var req models.SubmitBattleRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {

@@ -26,19 +26,12 @@ func (c *OMDBClient) FetchMovie(ctx context.Context, title string) (*models.Movi
 		return nil, fmt.Errorf("OMDB API key not found")
 	}
 
-	fmt.Println(c.apiKey)
-
-	fmt.Println("Do You have a title???", title)
-
 	// Create the URL with the API key and title
 	url := fmt.Sprintf("%s?apikey=%s&t=%s", c.baseURL, c.apiKey, title)
-
-	fmt.Println("URL ================", url)
 
 	// Make the HTTP request
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Println("DIDN'T RCV A MOVIE FROM OMDB", err)
 		return nil, fmt.Errorf("error making request to OMDB API: %v", err)
 	}
 	defer resp.Body.Close()

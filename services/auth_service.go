@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"movie-vs-backend/data_access"
 	"movie-vs-backend/helper"
 	"movie-vs-backend/models"
@@ -66,8 +65,6 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 		return "", err
 	}
 
-	fmt.Println("tokenstring???", tokenString)
-
 	return tokenString, nil
 }
 
@@ -90,8 +87,6 @@ func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (stri
 	if err != nil {
 		return "", err
 	}
-
-	fmt.Println("tokenstring???", tokenString)
 
 	return tokenString, nil
 }
