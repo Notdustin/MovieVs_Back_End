@@ -74,11 +74,11 @@ func (s *AuthService) Register(ctx context.Context, req *models.RegisterRequest)
 func (s *AuthService) Login(ctx context.Context, req *models.LoginRequest) (string, error) {
 	user, err := s.userRepo.FindByEmail(ctx, req.Email)
 	if err != nil {
-		return "", errors.New("invalid credentials")
+		return "", errors.New("invalid credentials - email not found")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return "", errors.New("invalid credentials")
+		return "", errors.New("invalid credentials - password problem")
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{

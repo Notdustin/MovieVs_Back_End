@@ -21,14 +21,22 @@ func NewGameController(gameService *services.GameService) *GameController {
 }
 
 func (c *GameController) GetMovieBattlePair(ctx *gin.Context) {
-	userID, exists := ctx.Get("userID")
+	userID, exists := ctx.Get("user_id")
+
+	fmt.Println("User ID:::::::::::::::::::::::::::::", userID)
 	if !exists {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
 
-	userObjectID, ok := userID.(primitive.ObjectID)
+	userIDStr, ok := userID.(string)
 	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	userObjectID, err := primitive.ObjectIDFromHex(userIDStr)
+	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
 		return
 	}
