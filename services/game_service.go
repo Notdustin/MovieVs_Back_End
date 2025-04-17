@@ -115,7 +115,6 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 
 	// Get or create user battle state
 	s.stateMutex.Lock()
-	defer s.stateMutex.Unlock()
 
 	if s.userStates == nil {
 		s.userStates = make(map[primitive.ObjectID]*models.UserBattleState)
@@ -360,15 +359,18 @@ func (s *GameService) GetBattlePair(ctx context.Context, userID primitive.Object
 		restart = true
 	}
 
-	// Defer will unlock mutex here
 	if restart {
 		fmt.Println("XXXXXXXXXXXXXXXXXXXXXXX Restarting flow...XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+		// Release the mutex before recursive call to avoid deadlock
+		s.stateMutex.Unlock()
 		return s.GetBattlePair(ctx, userID)
 	}
 	// Both movies exist in MongoDB, safe to proceed
 	movieDetailsA.ID = movieAFromMongo.ID
 	movieDetailsB.ID = movieBFromMongo.ID
 
+	// Unlock mutex before returning successful response
+	s.stateMutex.Unlock()
 	return &models.BattleResponse{
 		MovieA: *movieDetailsA,
 		MovieB: *movieDetailsB,
